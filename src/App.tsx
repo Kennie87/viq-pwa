@@ -21,6 +21,8 @@ function App() {
     useState(false);
   const [locationConfirmed, setLocationConfirmed] =
     useState(false);
+  const [deviceType, setDeviceType] = useState<"L" | "PC" | "">("");
+
   const stopScanner = () => {
     // Stop ZXing
     if (controlsRef.current) {
@@ -154,45 +156,223 @@ function App() {
   const readyToSubmit =
     locationBarcode.trim() !== "" &&
     equipmentBarcode.trim() !== "";
-  const submitInventoryRecord = () => {
- if (!readyToSubmit) {
-   return;
- }
- const record = {
-   RecordID: `INV-${Date.now()}`,
-   EquipmentBarcode: equipmentBarcode.trim(),
-   LocationBarcode: locationBarcode.trim(),
-   // We will parse these correctly later
-   Room: locationBarcode.trim(),
-   Building: "",
-   // Required VistA field for IT equipment
-   LocationService: "OI&T",
-   // Optional VistA fields
-   DeviceType: "",
-   Subtype: "",
-   // T = Today
-   InventoryDateSelection: "T",
-   Status: "PENDING",
- };
- // Convert the VIQ record into a JSON file
- const json = JSON.stringify(record, null, 2);
- const blob = new Blob([json], {
-   type: "application/json",
- });
- const url = URL.createObjectURL(blob);
- const link = document.createElement("a");
- link.href = url;
- link.download = `${record.RecordID}.json`;
- document.body.appendChild(link);
- link.click();
- document.body.removeChild(link);
- URL.revokeObjectURL(url);
- console.log("VIQ Inventory JSON:", json);
- // Clear ONLY the equipment.
- // The current location stays active.
- setEquipmentBarcode("");
- setError("");
-};
+  const submitInventoryRecord = async () => {
+
+    if (!readyToSubmit) {
+
+      return;
+
+    }
+
+    // Convert the door/location barcode into the VistA values.
+
+    // Example:
+
+    // SP2M224-500
+
+    // Detailed Location = 2M-224
+
+    // Location = 2M224-500
+
+    const rawLocation = locationBarcode.trim().toUpperCase();
+
+    let room = rawLocation;
+
+    let building = "";
+
+    const locationMatch = rawLocation.match(/^SP(.+?)-(\d+)$/);
+
+    if (locationMatch) {
+
+      const roomPart = locationMatch[1];
+
+      building = locationMatch[2];
+
+      // Split the room prefix from the room number.
+
+      // Example: 2M224 -> 2M + 224
+
+      const roomMatch = roomPart.match(/^([A-Z0-9]+?)(\d+)$/);
+
+      if (roomMatch) {
+
+        const roomPrefix = roomMatch[1];
+
+        const roomNumber = roomMatch[2];
+
+        room = `${roomPrefix}-${roomNumber}`;
+
+      } else {
+
+        room = roomPart;
+
+      }
+
+    }
+
+    const record = {
+
+      RecordID: `INV-${Date.now()}`,
+
+      EquipmentBarcode: equipmentBarcode.trim(),
+
+      LocationBarcode: rawLocation,
+
+      // VistA Detailed Location
+
+      Room: room,
+
+      // VistA Location building portion
+
+      Building: building,
+
+      // Required VistA field for IT equipment
+
+      LocationService: "OI&T",
+
+      // Device Type selected by user
+
+      // L = Laptop
+
+      // PC = Desktop
+
+      DeviceType: deviceType,
+
+      // Optional VistA field
+
+      Subtype: "",
+
+      // VistA will use today's date when the record is entered
+
+      InventoryDateSelection: "T",
+
+      Status: "PENDING",
+
+    };
+
+    const json = JSON.stringify(record, null, 2);
+
+    const fileName = `${record.RecordID}.json`;
+
+    // Create a REAL file instead of a URL.
+
+    const file = new File(
+
+      [json],
+
+      fileName,
+
+      {
+
+        type: "application/json",
+
+      }
+
+    );
+
+    try {
+
+      // Detect iPhone/iPad
+
+      const isIOS =
+
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+      if (
+
+        isIOS &&
+
+        navigator.share &&
+
+        navigator.canShare &&
+
+        navigator.canShare({ files: [file] })
+
+      ) {
+
+        // iPhone/iPad:
+
+        // Open the native Share Sheet with the actual JSON file.
+
+        await navigator.share({
+
+          title: "VIQ Inventory Record",
+
+          files: [file],
+
+        });
+
+      } else {
+
+        // Desktop:
+
+        // Download the JSON file normally.
+
+        const url = URL.createObjectURL(file);
+
+        const link = document.createElement("a");
+
+        link.href = url;
+
+        link.download = fileName;
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+        URL.revokeObjectURL(url);
+
+      }
+
+      console.log(
+
+        "VIQ Inventory JSON:",
+
+        JSON.stringify(record, null, 2)
+
+      );
+
+      // Clear ONLY the equipment.
+
+      setEquipmentBarcode("");
+
+      setError("");
+
+
+      console.log(
+
+        "VIQ Inventory JSON:",
+
+        JSON.stringify(record, null, 2)
+
+      );
+
+      // Clear ONLY the equipment.
+
+      // The current location stays active.
+
+      setEquipmentBarcode("");
+
+      setError("");
+
+    } catch (err) {
+
+      console.error("Unable to share VIQ record:", err);
+
+      setError(
+
+        "Unable to share the inventory record. Please try again."
+
+      );
+
+    }
+
+  };
+
 
   return (
     <div className="app">
@@ -380,6 +560,26 @@ function App() {
             <p>{error}</p>
           </section>
         )}
+        {/* DEVICE TYPE */}
+        <section className="device-type-section">
+          <h3>Device Type</h3>
+          <div className="device-type-toggle">
+            <button
+              type="button"
+              className={deviceType === "L" ? "selected" : ""}
+              onClick={() => setDeviceType("L")}
+            >
+              Laptop (L)
+            </button>
+            <button
+              type="button"
+              className={deviceType === "PC" ? "selected" : ""}
+              onClick={() => setDeviceType("PC")}
+            >
+              Desktop (PC)
+            </button>
+          </div>
+        </section>
         {/* RECORD PREVIEW */}
         <section className="preview-card">
           <h3>
