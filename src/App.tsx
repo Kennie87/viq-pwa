@@ -278,54 +278,25 @@ function App() {
 
           navigator.maxTouchPoints > 1);
 
-      if (
-
-        isIOS &&
-
-        navigator.share &&
-
-        navigator.canShare &&
-
-        navigator.canShare({ files: [file] })
-
-      ) {
-
+      if (isIOS && navigator.share) {
         try {
-
           await navigator.share({
-
             title: "VIQ Inventory Record",
-
-            files: [file],
-
+            text: json,
           });
-
           console.log(
-
             "VIQ Inventory JSON:",
-
             JSON.stringify(record, null, 2)
-
           );
-
           setEquipmentBarcode("");
-
           setError("");
-
           return;
-
         } catch (shareError) {
-
           console.log(
-
             "Share Sheet failed, falling back to download:",
-
             shareError
-
           );
-
         }
-
       }
 
       /*
