@@ -164,23 +164,25 @@ function App() {
 
     }
 
-    // Convert the door/location barcode into the VistA values.
-
-    // Example:
-
-    // SP2M224-500
-
-    // Detailed Location = 2M-224
-
-    // Location = 2M224-500
-
     const rawLocation = locationBarcode.trim().toUpperCase();
 
     let room = rawLocation;
 
     let building = "";
 
-    const locationMatch = rawLocation.match(/^SP(.+?)-(\d+)$/);
+    // Example:
+
+    // SP2M224-500
+
+    // becomes:
+
+    // Room = 2M-224
+
+    // Building = 500
+
+    // VistA Location = 2M224-500
+
+    const locationMatch = rawLocation.match(/^SP(.+?)-(\d{3})$/);
 
     if (locationMatch) {
 
@@ -188,19 +190,11 @@ function App() {
 
       building = locationMatch[2];
 
-      // Split the room prefix from the room number.
-
-      // Example: 2M224 -> 2M + 224
-
-      const roomMatch = roomPart.match(/^([A-Z0-9]+?)(\d+)$/);
+      const roomMatch = roomPart.match(/^([A-Z]+)(\d{3})$/);
 
       if (roomMatch) {
 
-        const roomPrefix = roomMatch[1];
-
-        const roomNumber = roomMatch[2];
-
-        room = `${roomPrefix}-${roomNumber}`;
+        room = `${roomMatch[1]}-${roomMatch[2]}`;
 
       } else {
 
@@ -210,6 +204,14 @@ function App() {
 
     }
 
+    const vistaLocation =
+
+      building
+
+        ? `${room.replace("-", "")}-${building}`
+
+        : rawLocation;
+
     const record = {
 
       RecordID: `INV-${Date.now()}`,
@@ -218,67 +220,63 @@ function App() {
 
       LocationBarcode: rawLocation,
 
-      // VistA Detailed Location
-
       Room: room,
-
-      // VistA Location building portion
 
       Building: building,
 
-      // Required VistA field for IT equipment
-
       LocationService: "OI&T",
-
-      // Device Type selected by user
-
-      // L = Laptop
-
-      // PC = Desktop
 
       DeviceType: deviceType,
 
-      // Optional VistA field
-
       Subtype: "",
 
-      // VistA will use today's date when the record is entered
-
       InventoryDateSelection: "T",
+
+      VistaLocation: vistaLocation,
 
       Status: "PENDING",
 
     };
 
-    const json = JSON.stringify(record, null, 2);
-
-    const fileName = `${record.RecordID}.json`;
-
-    // Create a REAL file instead of a URL.
-
-    const file = new File(
-
-      [json],
-
-      fileName,
-
-      {
-
-        type: "application/json",
-
-      }
-
-    );
-
     try {
 
-      // Detect iPhone/iPad
+      const json = JSON.stringify(record, null, 2);
+
+      const file = new File(
+
+        [json],
+
+        `${record.RecordID}.json`,
+
+        {
+
+          type: "application/json",
+
+        }
+
+      );
+
+      /*
+  
+       * PHONE / TABLET
+  
+       *
+  
+       * Use the iOS Share Sheet so the
+  
+       * VIQ Send Shortcut can receive
+  
+       * the actual JSON file.
+  
+       */
 
       const isIOS =
 
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        (navigator.platform === "MacIntel" &&
+
+          navigator.maxTouchPoints > 1);
 
       if (
 
@@ -292,42 +290,70 @@ function App() {
 
       ) {
 
-        // iPhone/iPad:
+        try {
 
-        // Open the native Share Sheet with the actual JSON file.
+          await navigator.share({
 
-        await navigator.share({
+            title: "VIQ Inventory Record",
 
-          title: "VIQ Inventory Record",
+            files: [file],
 
-          files: [file],
+          });
 
-        });
+          console.log(
 
-      } else {
+            "VIQ Inventory JSON:",
 
-        // Desktop:
+            JSON.stringify(record, null, 2)
 
-        // Download the JSON file normally.
+          );
 
-        const url = URL.createObjectURL(file);
+          setEquipmentBarcode("");
 
-        const link = document.createElement("a");
+          setError("");
 
-        link.href = url;
+          return;
 
-        link.download = fileName;
+        } catch (shareError) {
 
-        document.body.appendChild(link);
+          console.log(
 
-        link.click();
+            "Share Sheet failed, falling back to download:",
 
-        link.remove();
+            shareError
 
-        URL.revokeObjectURL(url);
+          );
+
+        }
 
       }
 
+      /*
+  
+       * COMPUTER / FALLBACK
+  
+       *
+  
+       * Download the actual JSON file.
+  
+       */
+
+      const url = URL.createObjectURL(file);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+
+      link.download = `${record.RecordID}.json`;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+
       console.log(
 
         "VIQ Inventory JSON:",
@@ -335,25 +361,6 @@ function App() {
         JSON.stringify(record, null, 2)
 
       );
-
-      // Clear ONLY the equipment.
-
-      setEquipmentBarcode("");
-
-      setError("");
-
-
-      console.log(
-
-        "VIQ Inventory JSON:",
-
-        JSON.stringify(record, null, 2)
-
-      );
-
-      // Clear ONLY the equipment.
-
-      // The current location stays active.
 
       setEquipmentBarcode("");
 
@@ -361,17 +368,20 @@ function App() {
 
     } catch (err) {
 
-      console.error("Unable to share VIQ record:", err);
+      console.error("VIQ record creation failed:", err);
 
       setError(
 
-        "Unable to share the inventory record. Please try again."
+        "Unable to create the inventory record. Please try again."
 
       );
 
     }
 
   };
+
+
+
 
 
   return (
