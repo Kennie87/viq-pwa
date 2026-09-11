@@ -294,8 +294,6 @@ function App() {
 
           await navigator.share({
 
-            title: "VIQ Inventory Record",
-
             files: [file],
 
           });
